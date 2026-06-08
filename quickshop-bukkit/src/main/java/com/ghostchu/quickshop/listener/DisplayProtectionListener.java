@@ -42,7 +42,7 @@ public class DisplayProtectionListener extends AbstractProtectionListener {
       return; // We didn't care that
     }
     @Nullable final Location loc = event.getInventory().getLocation();
-    @Nullable final InventoryHolder holder = event.getInventory().getHolder();
+    @Nullable final InventoryHolder holder = event.getInventory().getHolder(false);
     event.setCancelled(true);
     sendAlert(
             "[DisplayGuard] Something  "

@@ -66,7 +66,7 @@ public class ShopMigrate extends AbstractMigrateComponent {
             getHikari().getShopManager().deleteShop(hikariShop);
           }
         }
-        final BlockState block = shopLoc.getBlock().getState();
+        final BlockState block = shopLoc.getBlock().getState(false);
         if(!(block instanceof final InventoryHolder container)) {
           getHikari().logger().warn("Shop Invalid: Shop block not a valid Container, failed to create InventoryHolder.");
           return;

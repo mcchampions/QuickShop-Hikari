@@ -137,8 +137,11 @@ public class ShopProtectionListener extends AbstractProtectionListener {
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onHopperMoveItem(final InventoryMoveItemEvent event) {
-    InventoryHolder dHolder = event.getDestination().getHolder(false);
-    if(!this.hopperProtect || !(dHolder instanceof Hopper hopper)) {
+    if(!this.hopperProtect) {
+      return;
+    }
+    final InventoryHolder dHolder = event.getDestination().getHolder(false);
+    if(!(dHolder instanceof Hopper hopper)) {
       return;
     }
 
@@ -200,13 +203,13 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.MONITOR)
   public void onPlaceProtectedBlock(final BlockPlaceEvent e) {
 
-    if(e.getBlockPlaced().getState() instanceof final Hopper hopper) {
+    if(e.getBlockPlaced().getState(false) instanceof final Hopper hopper) {
       hopper.getPersistentDataContainer().set(hopperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
       hopper.setBlockData(e.getBlockPlaced().getBlockData());
       hopper.update();
     }
 
-    if(e.getBlockPlaced().getState() instanceof final Dropper dropper) {
+    if(e.getBlockPlaced().getState(false) instanceof final Dropper dropper) {
       dropper.getPersistentDataContainer().set(dropperKey, HopperPersistentDataType.INSTANCE, new HopperPersistentData(e.getPlayer().getUniqueId()));
       dropper.setBlockData(e.getBlockPlaced().getBlockData());
       dropper.update();
