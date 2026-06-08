@@ -28,6 +28,7 @@ import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.world.StructureGrowEvent;
+import org.bukkit.inventory.InventoryHolder;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -136,8 +137,8 @@ public class ShopProtectionListener extends AbstractProtectionListener {
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onHopperMoveItem(final InventoryMoveItemEvent event) {
-
-    if(!this.hopperProtect || !(event.getDestination().getHolder() instanceof Hopper)) {
+    InventoryHolder dHolder = event.getDestination().getHolder(false);
+    if(!this.hopperProtect || !(dHolder instanceof Hopper hopper)) {
       return;
     }
 
@@ -152,13 +153,13 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.hopperOwnerExclude && event.getDestination().getHolder(false) instanceof final Hopper hopper) {
-      final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
-      if(hopperPersistentData != null) {
-        if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
-          return;
+    if(this.hopperOwnerExclude) {
+        final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
+        if (hopperPersistentData != null) {
+            if (shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+                return;
+            }
         }
-      }
     }
     event.setCancelled(true);
   }
@@ -166,7 +167,8 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onDropperMoveItem(final InventoryMoveItemEvent event) {
 
-    if(!this.dropperProtect || !(event.getInitiator().getHolder() instanceof Dropper)) {
+    InventoryHolder iHolder = event.getDestination().getHolder(false);
+    if(!this.dropperProtect || !(iHolder instanceof Dropper dropper)) {
       return;
     }
 
@@ -181,13 +183,13 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.dropperOwnerExclude && event.getInitiator().getHolder(false) instanceof final Dropper dropper) {
-      final HopperPersistentData hopperPersistentData = dropper.getPersistentDataContainer().get(dropperKey, HopperPersistentDataType.INSTANCE);
-      if(hopperPersistentData != null) {
-        if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
-          return;
+    if(this.dropperOwnerExclude) {
+        final HopperPersistentData hopperPersistentData = dropper.getPersistentDataContainer().get(dropperKey, HopperPersistentDataType.INSTANCE);
+        if (hopperPersistentData != null) {
+            if (shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+                return;
+            }
         }
-      }
     }
     event.setCancelled(true);
   }
