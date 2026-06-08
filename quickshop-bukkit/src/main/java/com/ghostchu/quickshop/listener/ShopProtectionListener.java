@@ -167,8 +167,11 @@ public class ShopProtectionListener extends AbstractProtectionListener {
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onDropperMoveItem(final InventoryMoveItemEvent event) {
 
-    InventoryHolder iHolder = event.getDestination().getHolder(false);
-    if(!this.dropperProtect || !(iHolder instanceof Dropper dropper)) {
+    if(!this.dropperProtect) {
+      return;
+    }
+    final InventoryHolder iHolder = event.getDestination().getHolder(false);
+    if(!(iHolder instanceof Dropper dropper)) {
       return;
     }
 
