@@ -26,6 +26,7 @@ import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.world.StructureGrowEvent;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -151,7 +152,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.hopperOwnerExclude && event.getDestination().getHolder() instanceof final Hopper hopper) {
+    if(this.hopperOwnerExclude && event.getDestination().getHolder(false) instanceof final Hopper hopper) {
       final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
       if(hopperPersistentData != null) {
         if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
@@ -180,7 +181,7 @@ public class ShopProtectionListener extends AbstractProtectionListener {
       return;
     }
 
-    if(this.dropperOwnerExclude && event.getInitiator().getHolder() instanceof final Dropper dropper) {
+    if(this.dropperOwnerExclude && event.getInitiator().getHolder(false) instanceof final Dropper dropper) {
       final HopperPersistentData hopperPersistentData = dropper.getPersistentDataContainer().get(dropperKey, HopperPersistentDataType.INSTANCE);
       if(hopperPersistentData != null) {
         if(shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
