@@ -121,3 +121,6 @@ run/
 .${rootDir}/
 /.paper-nms/
 build/
+
+*.md
+*.mdx
