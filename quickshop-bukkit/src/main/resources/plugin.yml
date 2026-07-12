@@ -4,6 +4,7 @@ main: com.ghostchu.quickshop.QuickShopBukkit
 folia-supported: true
 softdepend:
   - Vault
+  - SlimeCoins
   - PlaceholderAPI
   - LuckPerms
   - PermissionEx

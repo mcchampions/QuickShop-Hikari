@@ -114,7 +114,7 @@ public class QSEconomyTransaction implements EconomyTransaction {
       throw new IllegalArgumentException("From and To cannot be null in same time.");
     }
 
-    this.provider = QuickShop.getInstance().getEconomyManager().provider();
+    this.provider = QuickShop.getInstance().getEconomyProvider(this.currency);
 
     if(this.benefitProvider == null) {
       this.benefitProvider = QSBenefitProvider.EMPTY;

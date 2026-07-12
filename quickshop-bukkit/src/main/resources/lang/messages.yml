@@ -282,6 +282,7 @@ translate-not-completed-yet-url: 'The translation of the language {0} was not co
   yet by {1}. Do you want to help us improving the translation? Browse: {2}'
 success-removed-shop: <green>Shop removed.
 currency-set: <green>Shop currency successfully set to {0}.
+currency-balance: '<green>Your balance: {0}'
 shop-purged-start: <green>Shop purge started, check the console for details.
 economy-transaction-failed: <red>Sorry, but an internal error occurred while processing
   your transaction. The transaction has been cancelled and any economic changes have

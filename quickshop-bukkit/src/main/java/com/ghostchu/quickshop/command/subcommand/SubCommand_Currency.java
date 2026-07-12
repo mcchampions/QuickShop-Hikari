@@ -1,6 +1,7 @@
 package com.ghostchu.quickshop.command.subcommand;
 
 import com.ghostchu.quickshop.QuickShop;
+import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.api.command.CommandHandler;
 import com.ghostchu.quickshop.api.command.CommandParser;
 import com.ghostchu.quickshop.api.event.Phase;
@@ -61,13 +62,17 @@ public class SubCommand_Currency implements CommandHandler<Player> {
           event.callEvent();
           return;
         }
-        if(!plugin.getEconomyManager().provider().multiCurrency()) {
-          plugin.text().of(sender, "currency-not-support").send();
-          return;
-        }
-        if(!plugin.getEconomyManager().provider().supportsCurrency(Objects.requireNonNull(shop.bukkitLocation().getWorld()).getName(), parser.getArgs().getFirst())) {
-          plugin.text().of(sender, "currency-not-exists").send();
-          return;
+        final EconomyProvider targetProvider = plugin.getEconomyProvider(parser.getArgs().getFirst());
+        final EconomyProvider defaultProvider = plugin.getEconomyManager().provider();
+        if(targetProvider == defaultProvider) {
+          if(!defaultProvider.multiCurrency()) {
+            plugin.text().of(sender, "currency-not-support").send();
+            return;
+          }
+          if(!defaultProvider.supportsCurrency(Objects.requireNonNull(shop.bukkitLocation().getWorld()).getName(), parser.getArgs().getFirst())) {
+            plugin.text().of(sender, "currency-not-exists").send();
+            return;
+          }
         }
 
         final PriceLimiter limiter = plugin.getShopManager().getPriceLimiter();

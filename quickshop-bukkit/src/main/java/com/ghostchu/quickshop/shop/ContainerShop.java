@@ -717,7 +717,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public @NotNull String format(final @NotNull String world, final @Nullable String currency) {
 
-    return plugin.getEconomyManager().provider().format(BigDecimal.valueOf(price()), world, currency);
+    return plugin.getEconomyProvider(currency).format(BigDecimal.valueOf(price()), world, currency);
   }
 
   /**
@@ -734,7 +734,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public @NotNull String format(final @NotNull String world, final @Nullable String currency, final int quantity) {
 
-    return plugin.getEconomyManager().provider().format(BigDecimal.valueOf(price() * quantity), world, currency);
+    return plugin.getEconomyProvider(currency).format(BigDecimal.valueOf(price() * quantity), world, currency);
   }
 
   /**

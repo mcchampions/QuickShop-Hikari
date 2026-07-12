@@ -809,7 +809,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     final PriceLimiterCheckResult priceCheckResult = this.priceLimiter.check(p, shop.getItem(), plugin.getCurrency(), shop.getPrice());
     final String currency = (shop.getCurrency() == null)? ((plugin.getCurrency() == null)? "" : plugin.getCurrency()) : shop.getCurrency();
     final World world = shop.bukkitLocation().getWorld();
-    final EconomyProvider econ = plugin.getEconomyManager().provider();
+    final EconomyProvider econ = plugin.getEconomyProvider(currency);
 
     final double min = priceCheckResult.getMin();
     final double max = priceCheckResult.getMax();
@@ -999,7 +999,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       double cost = plugin.getConfig().getDouble("shop.cost");
       final QSEconomyTransaction transaction;
       if(plugin.getConfig().getBoolean("shop.refund-from-tax-account", false) && shop.getTaxAccountActual() != null) {
-        cost = Math.min(cost, plugin.getEconomyManager().provider().balance(shop.getTaxAccountActual(), world.getName(), plugin.getCurrency()).doubleValue());
+        cost = Math.min(cost, plugin.getEconomyProvider(plugin.getCurrency()).balance(shop.getTaxAccountActual(), world.getName(), plugin.getCurrency()).doubleValue());
         transaction = QSEconomyTransaction.builder().amount(BigDecimal.valueOf(cost)).currency(plugin.getCurrency()).world(world.getName()).from(shop.getTaxAccountActual()).to(shop.getOwner()).build();
       } else {
         transaction = QSEconomyTransaction.builder().amount(BigDecimal.valueOf(cost)).currency(plugin.getCurrency()).world(world.getName()).to(shop.getOwner()).build();
@@ -1431,7 +1431,6 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       MsgUtil.sendDirectMessage(p, Component.text("Error: Economy system not loaded, type /quickshop main command to get details.").color(NamedTextColor.RED));
       return;
     }
-    final EconomyProvider eco = plugin.getEconomyManager().provider();
 
     // Get the shop they interacted with
     final Shop shop = plugin.getShopManager().getShop(info.getLocation());
@@ -1449,6 +1448,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       plugin.text().of(p, "shop-has-changed").send();
       return;
     }
+    final EconomyProvider eco = plugin.getEconomyProvider(shop.getCurrency());
     if(shop.isBuying()) {
       if(CommonUtil.isNumeric(message)) {
         amount = Integer.parseInt(message);

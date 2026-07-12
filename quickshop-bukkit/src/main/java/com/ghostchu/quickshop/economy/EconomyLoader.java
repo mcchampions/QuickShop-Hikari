@@ -23,6 +23,7 @@ import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.economy.provider.VaultProvider;
 import com.ghostchu.quickshop.economy.provider.VaultUnlockedProvider;
+import com.ghostchu.quickshop.economy.provider.SlimeCoinsProvider;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.performance.PerfMonitor;
 import net.milkbowl.vault2.economy.Economy;
@@ -90,6 +91,12 @@ public class EconomyLoader {
     plugin.getEconomyManager().provider(providerInstance);
     plugin.getEconomyManager().useProvider(providerInstance.name());
     plugin.logger().info("Selected economy bridge: {}", providerInstance.name());
+
+    final EconomyProvider slimeCoins = loadSlimeCoins();
+    if (slimeCoins != null) {
+      plugin.getEconomyManager().provider(slimeCoins);
+      plugin.logger().info("Additional economy bridge registered: {}", slimeCoins.name());
+    }
     return true;
   }
 
@@ -197,6 +204,15 @@ public class EconomyLoader {
       }
     }
     return vault;
+  }
+
+  private EconomyProvider loadSlimeCoins() {
+
+    final SlimeCoinsProvider provider = new SlimeCoinsProvider(plugin);
+    if (!provider.valid()) {
+      return null;
+    }
+    return provider;
   }
 
   private boolean vaultUnlockedPresent() {

@@ -81,7 +81,7 @@ public class MainPage extends QuickShopPage {
       final Player player = Bukkit.getPlayer(id);
       if(shop.isPresent() && player != null) {
 
-        final EconomyProvider eco = QuickShop.getInstance().getEconomyManager().provider();
+        final EconomyProvider eco = QuickShop.getInstance().getEconomyProvider(shop.get().getCurrency());
 
         // Load GUI configuration
         final GuiConfig.MenuConfig menuConfig = QuickShop.getInstance().getGuiConfig().getMenuConfig("trade");

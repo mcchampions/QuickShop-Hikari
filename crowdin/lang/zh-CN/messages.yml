@@ -68,6 +68,7 @@ average-price-nearby: '<green>附近的平均价格： <yellow>{0}'
 inventory-check-global-alert: "<red>[背包检查] <gray>警告！找到QuickShop悬浮物 <gold>{2}</gold> 在背包中 <aqua>{0}</aqua> <dark_gray>[{1}]</dark_gray>，这不应该发生，这通常意味着有人恶意利用漏洞来复制悬浮物。"
 digits-reach-the-limit: <red>您的价格中的小数点后位数超过上限。
 currency-unset: <green>商店货币已被成功删除。现在会使用默认货币。
+currency-balance: '<green>你的余额：{0}'
 you-cant-create-shop-in-there: <red>你没有在这个位置创建商店的权限。
 no-pending-action: <red>你没有任何进行中的操作
 refill-success: <green>补货成功

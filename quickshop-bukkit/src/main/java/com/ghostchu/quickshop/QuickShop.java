@@ -12,6 +12,7 @@ import com.ghostchu.quickshop.api.RankLimiter;
 import com.ghostchu.quickshop.api.command.CommandManager;
 import com.ghostchu.quickshop.api.database.DatabaseHelper;
 import com.ghostchu.quickshop.api.economy.EconomyManager;
+import com.ghostchu.quickshop.api.economy.EconomyProvider;
 import com.ghostchu.quickshop.api.event.QSConfigurationReloadEvent;
 import com.ghostchu.quickshop.api.hook.Hook;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapperManager;
@@ -602,6 +603,19 @@ public class QuickShop implements QuickShopAPI, Reloadable {
   public DatabaseHelper getDatabaseHelper() {
 
     return this.databaseHelper;
+  }
+
+  /**
+   * Retrieves the EconomyProvider associated with the given currency.
+   * If the currency matches a registered alternative provider, that provider is returned.
+   * Otherwise falls back to the default provider.
+   *
+   * @param currency the currency name, or null/empty for the default provider
+   * @return the EconomyProvider for the given currency
+   */
+  public EconomyProvider getEconomyProvider(@Nullable final String currency) {
+
+    return ((QSEconomyManager) economyManager).providerForCurrency(currency);
   }
 
   @Override

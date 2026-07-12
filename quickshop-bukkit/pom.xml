@@ -131,6 +131,12 @@
             <optional>true</optional>
         </dependency>
         <dependency>
+            <groupId>com.github.mcchampions</groupId>
+            <artifactId>SlimeCoins</artifactId>
+            <version>eb03a63d44</version>
+            <scope>provided</scope>
+        </dependency>
+        <dependency>
             <groupId>net.milkbowl.vault</groupId>
             <artifactId>VaultUnlockedAPI</artifactId>
             <version>${depend.vaultunlocked}</version>

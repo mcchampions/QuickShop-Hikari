@@ -363,6 +363,7 @@ shop:
     - unlimited
     - freeze
     - shop_mode
+    - currency
     - set_price
     - set_amount
     - refill

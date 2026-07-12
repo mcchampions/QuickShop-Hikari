@@ -5,6 +5,7 @@ import com.ghostchu.quickshop.api.shop.ControlComponent;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.ShopControlPanel;
 import com.ghostchu.quickshop.api.shop.ShopControlPanelManager;
+import com.ghostchu.quickshop.shop.controlpanel.component.CurrencyComponent;
 import com.ghostchu.quickshop.shop.controlpanel.component.DisplayComponent;
 import com.ghostchu.quickshop.shop.controlpanel.component.EmptyComponent;
 import com.ghostchu.quickshop.shop.controlpanel.component.FreezeComponent;
@@ -121,6 +122,7 @@ public class SimpleShopControlPanelManager implements ShopControlPanelManager, S
     addComponent(new UnlimitedComponent());
     addComponent(new FreezeComponent());
     addComponent(new ShopModeComponent());
+    addComponent(new CurrencyComponent());
     addComponent(new SetPriceComponent());
     addComponent(new SetAmountComponent());
     addComponent(new InventoryComponent());

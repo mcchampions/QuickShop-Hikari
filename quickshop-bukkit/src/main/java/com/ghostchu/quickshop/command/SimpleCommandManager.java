@@ -65,6 +65,7 @@ import com.ghostchu.quickshop.command.subcommand.silent.SubCommand_SilentPreview
 import com.ghostchu.quickshop.command.subcommand.silent.SubCommand_SilentRemove;
 import com.ghostchu.quickshop.command.subcommand.silent.SubCommand_SilentSell;
 import com.ghostchu.quickshop.command.subcommand.silent.SubCommand_SilentToggleDisplay;
+import com.ghostchu.quickshop.command.subcommand.silent.SubCommand_SilentCurrency;
 import com.ghostchu.quickshop.command.subcommand.silent.SubCommand_SilentUnlimited;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.util.MsgUtil;
@@ -242,6 +243,13 @@ public class SimpleCommandManager implements CommandManager, TabCompleter, Comma
                     .hidden(true)
                     .permission("quickshop.togglesilentfreeze")
                     .executor(new SubCommand_SilentFreeze(plugin))
+                    .build());
+    registerCmd(
+            CommandContainer.builder()
+                    .prefix("silentcurrency")
+                    .hidden(true)
+                    .permission("quickshop.currency")
+                    .executor(new SubCommand_SilentCurrency(plugin))
                     .build());
     registerCmd(
             CommandContainer.builder()

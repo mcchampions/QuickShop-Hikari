@@ -218,7 +218,7 @@ public class ShopUtil {
     final PriceLimiterCheckResult checkResult = limiter.check(user, shop.getItem(), plugin.getCurrency(), price);
     final String currency = (shop.getCurrency() == null)? ((plugin.getCurrency() == null)? "" : plugin.getCurrency()) : shop.getCurrency();
     final World world = shop.bukkitLocation().getWorld();
-    final EconomyProvider econ = plugin.getEconomyManager().provider();
+    final EconomyProvider econ = plugin.getEconomyProvider(currency);
 
     final double min = checkResult.getMin();
     final double max = checkResult.getMax();
@@ -311,7 +311,7 @@ public class ShopUtil {
       QuickShop.getInstance().text().of(p, "purchase-out-of-space", shop.ownerName()).send();
       return true;
     }
-    final EconomyProvider eco = QuickShop.getInstance().getEconomyManager().provider();
+    final EconomyProvider eco = QuickShop.getInstance().getEconomyProvider(shop.getCurrency());
     final double price = shop.getPrice();
     final Inventory playerInventory = p.getInventory();
     final String tradeAllWord = QuickShop.getInstance().getConfig().getString("shop.word-for-trade-all-items", "all");
@@ -328,6 +328,9 @@ public class ShopUtil {
         } else {
           QuickShop.getInstance().text().of(p, "how-many-sell", items, tradeAllWord).send();
         }
+        QuickShop.getInstance().text().of(p, "currency-balance",
+                eco.format(eco.balance(QUserImpl.createFullFilled(p), shop.bukkitLocation().getWorld().getName(), shop.getCurrency()),
+                        shop.bukkitLocation().getWorld().getName(), shop.getCurrency())).send();
       } else {
         final int arg;
         if(all) {
@@ -354,7 +357,7 @@ public class ShopUtil {
       return false;
     }
 
-    final EconomyProvider eco = QuickShop.getInstance().getEconomyManager().provider();
+    final EconomyProvider eco = QuickShop.getInstance().getEconomyProvider(shop.getCurrency());
     final int arg;
     if(all) {
       arg = sellingShopAllCalc(eco, shop, p);
@@ -388,7 +391,7 @@ public class ShopUtil {
     }
     Util.playClickSound(p);
     shop.onClick(p);
-    final EconomyProvider eco = QuickShop.getInstance().getEconomyManager().provider();
+    final EconomyProvider eco = QuickShop.getInstance().getEconomyProvider(shop.getCurrency());
     final double price = shop.getPrice();
     final Inventory playerInventory = p.getInventory();
     final String tradeAllWord = QuickShop.getInstance().getConfig().getString("shop.word-for-trade-all-items", "all");
@@ -405,6 +408,8 @@ public class ShopUtil {
         } else {
           QuickShop.getInstance().text().of(p, "how-many-buy", itemAmount, tradeAllWord).send();
         }
+        QuickShop.getInstance().text().of(p, "currency-balance",
+                eco.format(BigDecimal.valueOf(traderBalance), shop.bukkitLocation().getWorld().getName(), shop.getCurrency())).send();
       } else {
         QuickShop.getInstance().getShopManager().actionSelling(p, new BukkitInventoryWrapper(p.getInventory()), eco, info, shop, arg);
       }

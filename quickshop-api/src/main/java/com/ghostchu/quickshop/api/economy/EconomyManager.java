@@ -69,4 +69,17 @@ public interface EconomyManager {
    */
   @Nullable
   EconomyProvider provider();
+
+  /**
+   * Retrieves the EconomyProvider for the given currency.
+   * If no provider is registered for the currency, returns the default provider.
+   *
+   * @param currency the currency name, or null/empty for default
+   * @return the matching EconomyProvider, or the default
+   */
+  @Nullable
+  default EconomyProvider providerForCurrency(@Nullable final String currency) {
+
+    return provider();
+  }
 }

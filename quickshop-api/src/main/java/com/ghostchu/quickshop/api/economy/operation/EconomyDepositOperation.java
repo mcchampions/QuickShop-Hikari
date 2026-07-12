@@ -64,7 +64,7 @@ public class EconomyDepositOperation implements Operation {
   @Override
   public EconomyOperationResult commit() {
 
-    final EconomyProvider provider = QuickShopAPI.getInstance().getEconomyManager().provider();
+    final EconomyProvider provider = QuickShopAPI.getInstance().getEconomyManager().providerForCurrency(currency);
     if(provider == null) {
       return new EconomyOperationResult(false, BigDecimal.ZERO);
     }
@@ -106,7 +106,7 @@ public class EconomyDepositOperation implements Operation {
   @Override
   public boolean rollback() {
 
-    final EconomyProvider provider = QuickShopAPI.getInstance().getEconomyManager().provider();
+    final EconomyProvider provider = QuickShopAPI.getInstance().getEconomyManager().providerForCurrency(currency);
     if(provider == null) {
       return false;
     }

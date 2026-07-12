@@ -36,6 +36,7 @@ import java.util.Optional;
 public class QSEconomyManager implements EconomyManager {
 
   final Map<String, EconomyProvider> providers = new HashMap<>();
+  final Map<String, String> currencyProviderMap = new HashMap<>();
 
   String currentProvider = "VAULT";
 
@@ -59,6 +60,7 @@ public class QSEconomyManager implements EconomyManager {
   public void provider(final @NotNull EconomyProvider provider) {
 
     providers.put(provider.name().toUpperCase(Locale.ROOT), provider);
+    currencyProviderMap.put(provider.providerName().toUpperCase(Locale.ROOT), provider.name());
   }
 
   /**
@@ -95,5 +97,29 @@ public class QSEconomyManager implements EconomyManager {
   public @Nullable EconomyProvider provider() {
 
     return providers.get(currentProvider.toUpperCase(Locale.ROOT));
+  }
+
+  /**
+   * Retrieves the EconomyProvider that should handle the given currency.
+   * If the currency matches a registered provider name, that provider is returned.
+   * Otherwise falls back to the default provider.
+   *
+   * @param currency the currency name, or null for default provider
+   * @return The EconomyProvider for the given currency, or the default provider
+   */
+  @Override
+  public @Nullable EconomyProvider providerForCurrency(@Nullable final String currency) {
+
+    if (currency == null || currency.isEmpty()) {
+      return provider();
+    }
+    final String providerName = currencyProviderMap.get(currency.toUpperCase(Locale.ROOT));
+    if (providerName != null) {
+      final EconomyProvider provider = providers.get(providerName.toUpperCase(Locale.ROOT));
+      if (provider != null && provider.valid()) {
+        return provider;
+      }
+    }
+    return provider();
   }
 }
