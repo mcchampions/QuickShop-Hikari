@@ -17,6 +17,7 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Dropper;
 import org.bukkit.block.Hopper;
+import org.bukkit.entity.minecart.HopperMinecart;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.block.BlockExplodeEvent;
@@ -137,65 +138,62 @@ public class ShopProtectionListener extends AbstractProtectionListener {
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onHopperMoveItem(final InventoryMoveItemEvent event) {
-    if(!this.hopperProtect) {
-      return;
-    }
-    final InventoryHolder dHolder = event.getDestination().getHolder(false);
-    if(!(dHolder instanceof Hopper hopper)) {
+    if (!this.hopperProtect) {
       return;
     }
 
-    final Location loc = event.getSource().getLocation();
-    if(loc == null) {
+    final InventoryHolder destinationHolder = event.getDestination().getHolder(false);
+    if (!(destinationHolder instanceof Hopper || destinationHolder instanceof HopperMinecart)) {
       return;
     }
 
-    final Shop shop = getShopRedstone(loc, true);
+    final Location sourceLocation  = event.getSource().getLocation();
+    if (sourceLocation  == null) {
+      return;
+    }
 
+    final Shop shop = getShopRedstone(sourceLocation , true);
     if(shop == null) {
       return;
     }
 
-    if(this.hopperOwnerExclude) {
-        final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
-        if (hopperPersistentData != null) {
-            if (shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
-                return;
-            }
-        }
+
+    if(this.hopperOwnerExclude && destinationHolder instanceof final Hopper hopper) {
+      final HopperPersistentData hopperPersistentData = hopper.getPersistentDataContainer().get(hopperKey, HopperPersistentDataType.INSTANCE);
+      if(hopperPersistentData != null && shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+        return;
+      }
     }
     event.setCancelled(true);
   }
 
   @EventHandler(ignoreCancelled = true, priority = EventPriority.HIGH)
   public void onDropperMoveItem(final InventoryMoveItemEvent event) {
-
-    if(!this.dropperProtect) {
-      return;
-    }
-    final InventoryHolder iHolder = event.getDestination().getHolder(false);
-    if(!(iHolder instanceof Dropper dropper)) {
+    if (!dropperProtect) {
       return;
     }
 
-    final Location loc = event.getDestination().getLocation();
-    if(loc == null) {
+    final InventoryHolder destinationHolder = event.getDestination().getHolder(false);
+    if (!(destinationHolder instanceof final Dropper dropper)) {
       return;
     }
 
-    final Shop shop = getShopRedstone(loc, true);
-
-    if(shop == null) {
+    final Location sourceLocation = event.getDestination().getLocation();
+    if (sourceLocation == null) {
       return;
     }
 
-    if(this.dropperOwnerExclude) {
-        final HopperPersistentData hopperPersistentData = dropper.getPersistentDataContainer().get(dropperKey, HopperPersistentDataType.INSTANCE);
-        if (hopperPersistentData != null) {
-            if (shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
-                return;
-            }
-        }
+    final Shop shop = getShopRedstone(sourceLocation, true);
+    if (shop == null) {
+      return;
+    }
+
+    if (this.dropperOwnerExclude) {
+
+      final HopperPersistentData hopperPersistentData = dropper.getPersistentDataContainer().get(dropperKey, HopperPersistentDataType.INSTANCE);
+      if (hopperPersistentData != null && shop.playerAuthorize(hopperPersistentData.getPlayer(), BuiltInShopPermission.ACCESS_INVENTORY)) {
+        return;
+      }
     }
     event.setCancelled(true);
   }

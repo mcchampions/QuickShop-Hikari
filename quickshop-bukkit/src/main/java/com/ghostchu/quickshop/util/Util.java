@@ -1,5 +1,6 @@
 package com.ghostchu.quickshop.util;
 
+import com.destroystokyo.paper.MaterialTags;
 import com.destroystokyo.paper.ParticleBuilder;
 import com.ghostchu.quickshop.QuickShop;
 import com.ghostchu.quickshop.api.event.Phase;
@@ -7,10 +8,13 @@ import com.ghostchu.quickshop.api.event.management.ShopCreateEvent;
 import com.ghostchu.quickshop.api.inventory.CountableInventoryWrapper;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapper;
 import com.ghostchu.quickshop.api.inventory.InventoryWrapperIterator;
+import com.ghostchu.quickshop.api.localization.text.ProxiedLocale;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.ItemMatcher;
 import com.ghostchu.quickshop.api.shop.Shop;
 import com.ghostchu.quickshop.api.shop.ShopAction;
+import com.ghostchu.quickshop.api.shop.layout.ConditionalRenderComponent;
+import com.ghostchu.quickshop.api.shop.layout.RenderComponent;
 import com.ghostchu.quickshop.api.shop.permission.BuiltInShopPermission;
 import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.common.util.RomanNumber;
@@ -19,11 +23,10 @@ import com.ghostchu.quickshop.shop.SimpleInfo;
 import com.ghostchu.quickshop.shop.display.AbstractDisplayItem;
 import com.ghostchu.quickshop.util.logger.Log;
 import dev.dejvokep.boostedyaml.route.Route;
-import io.papermc.paper.registry.RegistryAccess;
-import io.papermc.paper.registry.RegistryKey;
 import lombok.Getter;
 import lombok.Setter;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -33,7 +36,6 @@ import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Particle;
-import org.bukkit.Registry;
 import org.bukkit.Sound;
 import org.bukkit.Tag;
 import org.bukkit.World;
@@ -46,7 +48,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
 import org.bukkit.event.Event;
@@ -56,7 +57,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.PotionMeta;
 import org.bukkit.plugin.Plugin;
+import org.bukkit.potion.PotionEffect;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -74,6 +77,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -86,7 +90,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.logging.Level;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class Util {
 
@@ -147,6 +150,23 @@ public class Util {
     }
 
     QuickShop.folia().getScheduler().runLaterAsync(runnable, 0);
+  }
+
+  public static String locationToPDCString(final Location location) {
+
+    return location.getBlockX() + ";" + location.getBlockY() + ";" + location.getBlockZ();
+  }
+
+  public static Location locationFromPDCString(final World world, final @Nullable String locationString) {
+    if(locationString == null) {
+      return null;
+    }
+    final String[] split = locationString.split(";");
+    if(split.length < 3) {
+      return null;
+    }
+
+    return new Location(world, Integer.parseInt(split[0]), Integer.parseInt(split[1]), Integer.parseInt(split[2]));
   }
 
   public static void playClickSound(@NotNull final Player player) {
@@ -453,6 +473,26 @@ public class Util {
     return true;
   }
 
+  public static boolean canBeShop(@NotNull final Block b, final BlockState bs) {
+
+    if(isBlacklistWorld(b.getWorld())) {
+      return false;
+    }
+
+    // Specified types by configuration
+    if(!isShoppables(b.getType())) {
+      return false;
+    }
+
+    if (!(bs instanceof InventoryHolder)) {
+      if(Util.isDevMode()) {
+        Log.debug(b.getType() + " not a container");
+      }
+      return false;
+    }
+    return true;
+  }
+
   public static boolean isBlacklistWorld(@NotNull final World world) {
 
     final List<String> whitelist = plugin.getConfig().getStringList("shop.whitelist-world");
@@ -595,6 +635,16 @@ public class Util {
   public static int getItemMaxStackSize(@NotNull final Material material) {
 
     return CUSTOM_STACKSIZE.getOrDefault(material, BYPASSED_CUSTOM_STACKSIZE == -1? material.getMaxStackSize() : BYPASSED_CUSTOM_STACKSIZE);
+  }
+
+  public static int[] getItemMaxStackSizes(@NotNull final ItemStack[] item) {
+
+    final int[] stackSizes = new int[item.length];
+    for(int i = 0; i < item.length; i++) {
+
+      stackSizes[i] = getItemMaxStackSize(item[i].getType());
+    }
+    return stackSizes;
   }
 
   /**
@@ -840,8 +890,72 @@ public class Util {
     }
   }
 
+  public static Component getTextDisplay(@NotNull final Shop shop, @NotNull final ItemStack itemStack) {
+    if(!plugin.getConfig().getBoolean("shop.text-display.enabled", false)) {
+      return Component.empty();
+    }
+
+    Component display = Component.empty();
+    final List<String> lines = plugin.getConfig().getStringList("shop.text-display.lines");
+    final ProxiedLocale locale = plugin.text().findRelativeLanguages(plugin.text().getDefLocale());
+    for(int i = 0; i < lines.size(); i++) {
+
+      final String line = lines.get(i);
+
+      boolean isFullLine = false;
+      for (final RenderComponent component : plugin.getShopManager().shopLayoutProvider().fullLineRenderComponents()) {
+
+        if (!component.appliesTo(line)) {
+          continue;
+        }
+
+        display = display.append(component.render(shop, itemStack, locale));
+
+        if(i < lines.size() - 1) {
+          display = display.append(Component.newline());
+        }
+        isFullLine = true;
+        break;
+
+      }
+
+      if (isFullLine) {
+        continue;
+      }
+
+      Component lineComponent = MiniMessage.miniMessage().deserialize(line);
+      for (final RenderComponent component : plugin.getShopManager().shopLayoutProvider().inlineRenderComponents()) {
+
+        if (!component.appliesTo(line)) {
+          continue;
+        }
+
+        if (component instanceof final ConditionalRenderComponent conditionalComponent && conditionalComponent.isFullLine(shop)) {
+          lineComponent = conditionalComponent.render(shop, itemStack, locale);
+          break;
+        }
+
+        lineComponent = lineComponent.replaceText(builder -> builder
+                .matchLiteral(component.placeholder())
+                .replacement(component.render(shop, itemStack, locale)));
+      }
+      display = display.append(lineComponent);
+
+      if(i < lines.size() - 1) {
+        display = display.append(Component.newline());
+      }
+    }
+    return display;
+  }
+
   @NotNull
   public static Component getItemStackName(@NotNull final ItemStack itemStack) {
+
+    return getItemStackName(itemStack, plugin.text().getDefLocale());
+  }
+
+  @NotNull
+  public static Component getItemStackName(@NotNull final ItemStack itemStack, final String locale) {
 
     Component result = getItemCustomName(itemStack);
     if(isEmptyComponent(result)) {
@@ -858,15 +972,35 @@ public class Util {
   @Nullable
   public static Component getItemCustomName(@NotNull final ItemStack itemStack) {
 
+    return getItemCustomName(itemStack, plugin.text().getDefLocale());
+  }
+
+  @Nullable
+  public static Component getItemCustomName(@NotNull final ItemStack itemStack, final String locale) {
+
+    final ItemMeta meta = itemStack.getItemMeta();
     if(useEnchantmentForEnchantedBook() && itemStack.getType() == Material.ENCHANTED_BOOK) {
-      final ItemMeta meta = itemStack.getItemMeta();
       if(meta instanceof final EnchantmentStorageMeta enchantmentStorageMeta && enchantmentStorageMeta.hasStoredEnchants()) {
         return getFirstEnchantmentName(enchantmentStorageMeta);
       }
     }
 
+    if(usePotionForPotionItem() && meta instanceof PotionMeta) {
 
-    if(!itemStack.hasItemMeta() || QuickShop.getInstance().getConfig().getBoolean("shop.force-use-item-original-name")) {
+      return getFirstPotionEffectName(itemStack, locale);
+    }
+
+    if(useSongForDiscItem() && MaterialTags.MUSIC_DISCS.isTagged(itemStack.getType())) {
+
+      final Component component = Component.translatable("jukebox_song.minecraft." + itemStack.getType().name().toLowerCase(Locale.ROOT).replace("music_disc_", ""));
+      final String[] asText = PlainTextComponentSerializer.plainText().serialize(component).split("-");
+      final String songName = (asText.length > 1)? asText[1] : asText[0];
+
+      return Component.text(songName).append(Component.text(" ")).append(plugin.platform().getTranslation(itemStack));
+    }
+
+
+    if(meta == null) {
 
       return null;
     }
@@ -874,14 +1008,23 @@ public class Util {
     boolean itemName = false;
 
     try {
-      itemName = Objects.requireNonNull(itemStack.getItemMeta()).hasItemName();
+      itemName = meta.hasItemName();
     } catch(final NoSuchMethodError ignore) {
       //outdated
     }
 
-    if(Objects.requireNonNull(itemStack.getItemMeta()).hasDisplayName() || itemName) {
+    if(QuickShop.getInstance().getConfig().getBoolean("shop.force-use-item-original-name")) {
 
-      return plugin.platform().getDisplayName(itemStack.getItemMeta());
+      try {
+        return itemName ? meta.itemName() : null;
+      } catch(final NoSuchMethodError ignored) {}
+
+      return null;
+    }
+
+    if(meta.hasDisplayName() || itemName) {
+
+      return plugin.platform().getDisplayName(meta);
     }
     return null;
   }
@@ -975,8 +1118,11 @@ public class Util {
       name = MsgUtil.setHandleFailedHover(null, Component.text(enchantment.getKey().getKey()));
       plugin.logger().warn("Failed to handle translation for Enchantment {}", enchantment.getKey(), throwable);
     }
-    if(level > 1) {
-      name.append(Component.text(" " + RomanNumber.toRoman(level)));
+
+    if(enchantment.getMaxLevel() > 1 || level > 1) {
+      
+      final String levelString = (plugin.getConfig().getBoolean("shop.use-roman-numeral-for-enchantments", true))? RomanNumber.toRoman(level) : "" + level;
+      name = name.append(Component.text(" ")).append(Component.text(levelString));
     }
     return name;
   }
@@ -984,6 +1130,19 @@ public class Util {
   public static boolean useEnchantmentForEnchantedBook() {
 
     return plugin.getConfig().getBoolean("shop.use-enchantment-for-enchanted-book");
+  }
+
+  @Nullable
+  public static Entry<Enchantment, Integer> getFirstEnchantment(@NotNull final ItemStack itemStack) {
+
+    final ItemMeta meta = itemStack.getItemMeta();
+    if(meta instanceof final EnchantmentStorageMeta enchantmentStorageMeta && enchantmentStorageMeta.hasStoredEnchants()) {
+
+      return enchantmentStorageMeta.getStoredEnchants().entrySet().stream().findFirst().orElse(null);
+    } else {
+
+      return meta.getEnchants().entrySet().stream().findFirst().orElse(null);
+    }
   }
 
   @NotNull
@@ -994,6 +1153,77 @@ public class Util {
     }
     final Entry<Enchantment, Integer> entry = meta.getStoredEnchants().entrySet().iterator().next();
     return enchantmentDataToComponent(entry.getKey(), entry.getValue());
+  }
+
+  public static boolean usePotionForPotionItem() {
+
+    return plugin.getConfig().getBoolean("shop.use-effect-for-potion-item");
+  }
+
+  public static boolean useSongForDiscItem() {
+
+    return plugin.getConfig().getBoolean("shop.use-song-for-disc-item");
+  }
+
+  @Nullable
+  public static Component getFirstPotionEffectName(@NotNull final ItemStack item) {
+
+    return getFirstPotionEffectName(item, plugin.text().getDefLocale());
+  }
+
+  @Nullable
+  public static Component getFirstPotionEffectName(@NotNull final ItemStack item, final String locale) {
+
+    Component name = null;
+    final PotionEffect effect = getFirstPotionEffect(item);
+    if(effect != null) {
+
+      name = plugin.platform().getTranslation(effect.getType());
+
+      name = name.append(Component.text(" " + RomanNumber.toRoman(effect.getAmplifier() + 1)));
+
+      name = name.append(Component.text(" " + formatDuration(effect)));
+
+      if(item.getType() == Material.SPLASH_POTION) {
+
+        name = name.append(Component.text(" ")).append(plugin.text().of("signs.splash-potion").forLocale(locale));
+      } else if(item.getType() == Material.LINGERING_POTION) {
+
+        name = name.append(Component.text(" ")).append(plugin.text().of("signs.linger-potion").forLocale(locale));
+      }
+    }
+    return name;
+  }
+
+  @Nullable
+  public static PotionEffect getFirstPotionEffect(@NotNull final ItemStack item) {
+
+    final ItemMeta meta = item.getItemMeta();
+    if(meta instanceof final PotionMeta potion && potion.getBasePotionType() != null && !potion.getBasePotionType().getPotionEffects().isEmpty()) {
+      return potion.getBasePotionType().getPotionEffects().getFirst();
+    }
+    return null;
+  }
+
+  public static Component getPotionLevel(final PotionEffect effect) {
+    return Component.text(RomanNumber.toRoman(effect.getAmplifier() + 1));
+  }
+
+  public static String getPotionDuration(final PotionEffect effect) {
+    return formatDuration(effect);
+  }
+
+  public static String formatDuration(final PotionEffect effect) {
+    if(effect.isInfinite()) {
+
+      return "∞";
+    }
+
+    final int totalSeconds = effect.getDuration() / 20;
+    final int minutes = totalSeconds / 60;
+    final int seconds = totalSeconds % 60;
+
+    return minutes + ":" + String.format("%02d", seconds);
   }
 
   public static int getItemTotalAmountsInMap(@NotNull final Map<Integer, ItemStack> map) {
@@ -1489,6 +1719,36 @@ public class Util {
     } else {
       return null;
     }
+  }
+
+  /**
+   * Creates a byte representing a set of flags based on the provided boolean parameters.
+   * Each parameter corresponds to a specific bit in the byte.
+   *
+   * @return a byte where each bit represents a corresponding flag set by the input parameters.
+   */
+  public static byte createTextDisplayFlags() {
+
+    final int background = plugin.getConfig().getInt("shop.text-display.background-color", 1073741824);
+    final boolean defaultBackground = background == 1073741824;
+    final boolean hasShadow = plugin.getConfig().getBoolean("shop.text-display.shadow.enabled", true);
+    final boolean seeThrough = plugin.getConfig().getBoolean("shop.text-display.see-through", false);
+
+    byte flags = 0;
+
+    if (hasShadow) {
+      flags |= 0x01;
+    }
+
+    if (seeThrough) {
+      flags |= 0x02;
+    }
+
+    if (defaultBackground) {
+      flags |= 0x04;
+    }
+
+    return flags;
   }
 
   /**

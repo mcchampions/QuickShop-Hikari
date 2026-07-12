@@ -23,16 +23,24 @@ import com.ghostchu.quickshop.api.localization.text.ProxiedLocale;
 import com.ghostchu.quickshop.api.obj.QUser;
 import com.ghostchu.quickshop.api.shop.IShopType;
 import com.ghostchu.quickshop.api.shop.state.ShopState;
+import com.ghostchu.quickshop.common.util.JsonUtil;
 import net.kyori.adventure.text.Component;
+import org.bukkit.NamespacedKey;
+import org.bukkit.block.Block;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
- * ShopIdentity
+ * ShopMeta
  *
  * @author creatorfromhell
  * @since 6.3.0.0
@@ -92,6 +100,14 @@ public interface ShopMeta<U> extends ShopPrice<U> {
    * @param item ItemStack to set
    */
   void setItem(@NotNull ItemStack item);
+
+  /**
+   * Get shop block
+   *
+   * @return The shop's block
+   */
+  @NotNull
+  Block getShopBlock();
 
   /**
    * Gets the currency that shop use

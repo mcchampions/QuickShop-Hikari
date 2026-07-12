@@ -30,6 +30,7 @@ import com.ghostchu.quickshop.util.ShopUtil;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
 import com.ghostchu.quickshop.util.logging.container.ShopRemoveLog;
+import net.kyori.adventure.text.Component;
 import net.tnemc.item.AbstractItemStack;
 import net.tnemc.item.bukkit.BukkitItemStack;
 import net.tnemc.item.providers.SkullProfile;
@@ -42,13 +43,17 @@ import net.tnemc.menu.core.icon.impl.StateIcon;
 import net.tnemc.menu.core.manager.MenuManager;
 import net.tnemc.menu.core.viewer.MenuViewer;
 import org.bukkit.Bukkit;
+import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.EnchantmentStorageMeta;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -59,7 +64,6 @@ import static com.ghostchu.quickshop.menu.ShopKeeperMenu.KEEPER_MAIN;
 import static com.ghostchu.quickshop.shop.SimpleShopManager.ACTIVE_STATE;
 import static com.ghostchu.quickshop.shop.SimpleShopManager.BUYING_TYPE;
 import static com.ghostchu.quickshop.shop.SimpleShopManager.FROZEN_STATE;
-import static com.ghostchu.quickshop.shop.SimpleShopManager.FROZEN_TYPE;
 import static com.ghostchu.quickshop.shop.SimpleShopManager.SELLING_TYPE;
 
 /**
@@ -86,6 +90,7 @@ public class MainPage extends QuickShopPage {
 
       final Optional<Shop> shop = getShop(viewer.get());
       final Player player = Bukkit.getPlayer(id);
+
       if(shop.isPresent() && player != null) {
 
         // Clear existing icons to ensure fresh data on reopen
@@ -118,12 +123,11 @@ public class MainPage extends QuickShopPage {
         // Shop item preview - top center (slot 4)
         final ItemStack shopItem = shop.get().getItem();
         final int shopItemSlot = shopItemConfig != null? shopItemConfig.getSlot() : 4;
-        open.getPage().addIcon(new IconBuilder(new BukkitItemStack().of(shopItem)).withSlot(shopItemSlot).build());
+        final AbstractItemStack<ItemStack> shopItemStack = QuickShop.getInstance().stack(shopItem);
+        open.getPage().addIcon(new IconBuilder(shopItemStack).withSlot(shopItemSlot).build());
 
         // Always read price directly from shop to get the latest value
         final double currentPrice = shop.get().getPrice();
-
-
 
         final GuiConfig.IconConfig activeConfig = (displayToggleConfig != null)? displayToggleConfig.getSubIcon("active") : null;
         final GuiConfig.IconConfig inactiveConfig = (displayToggleConfig != null)? displayToggleConfig.getSubIcon("inactive") : null;
@@ -138,11 +142,11 @@ public class MainPage extends QuickShopPage {
           final String disabledText = QuickShop.getInstance().text().of("shop-display.disabled").plain();
 
           final AbstractItemStack<?> activeStack = QuickShop.getInstance().stack().of(activeMaterial, 1)
-                  .display(getConfigDisplay(id, displayToggleConfig, "<bold><green>Toggle Preview</green></bold>"))
+                  .customName(getConfigDisplay(id, displayToggleConfig, "<bold><green>Toggle Preview</green></bold>"))
                   .lore(getConfigLore(id, displayToggleConfig, enabledText));
 
           final AbstractItemStack<?> inactiveStack = QuickShop.getInstance().stack().of(inactiveMaterial, 1)
-                  .display(getConfigDisplay(id, displayToggleConfig, "<bold><green>Toggle Preview</green></bold>"))
+                  .customName(getConfigDisplay(id, displayToggleConfig, "<bold><green>Toggle Preview</green></bold>"))
                   .lore(getConfigLore(id, displayToggleConfig, disabledText));
 
           final String modeState = (!shop.get().isDisableDisplay())? "ACTIVE" : "INACTIVE";
@@ -171,7 +175,7 @@ public class MainPage extends QuickShopPage {
         if(shop.get().playerAuthorize(id, BuiltInShopPermission.SET_PRICE)
            || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.price")) {
           open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(changePriceMaterial, 1)
-                                                         .display(getConfigDisplay(id, changePriceConfig, "<bold><green>Change Price</green></bold>"))
+                                                         .customName(getConfigDisplay(id, changePriceConfig, "<bold><green>Change Price</green></bold>"))
                                                          .lore(getConfigLore(id, changePriceConfig, currentPrice)))
                                          .withActions(new GuiChatAction((message)->{
                                            if(!message.isEmpty()) {
@@ -209,11 +213,11 @@ public class MainPage extends QuickShopPage {
           final String unfrozenText = QuickShop.getInstance().text().of("shop-state.unfrozen").plain();
 
           final AbstractItemStack<?> freezeStack = QuickShop.getInstance().stack().of(freezeMaterial, 1)
-                  .display(getConfigDisplay(id, freezeToggleConfig, "<bold><green>Toggle Freeze</green></bold>"))
+                  .customName(getConfigDisplay(id, freezeToggleConfig, "<bold><green>Toggle Freeze</green></bold>"))
                   .lore(getConfigLore(id, freezeToggleConfig, frozenText, unfreezeText));
 
           final AbstractItemStack<?> unfreezeStack = QuickShop.getInstance().stack().of(unfreezeMaterial, 1)
-                  .display(getConfigDisplay(id, freezeToggleConfig, "<bold><green>Toggle Freeze</green></bold>"))
+                  .customName(getConfigDisplay(id, freezeToggleConfig, "<bold><green>Toggle Freeze</green></bold>"))
                   .lore(getConfigLore(id, freezeToggleConfig, unfrozenText, freezeText));
 
           final String modeState = shop.get().shopState().identifier().toUpperCase(Locale.ROOT);
@@ -253,11 +257,11 @@ public class MainPage extends QuickShopPage {
           final String buyingText = QuickShop.getInstance().text().of("shop-type.buying").plain();
 
           final AbstractItemStack<?> buyingStack = QuickShop.getInstance().stack().of(sellingMaterial, 1)
-                  .display(getConfigDisplay(id, modeToggleConfig, "<bold><green>Change Mode</green></bold>"))
+                  .customName(getConfigDisplay(id, modeToggleConfig, "<bold><green>Change Mode</green></bold>"))
                   .lore(getConfigLore(id, modeToggleConfig, sellingText, buyingText));
 
           final AbstractItemStack<?> sellingStack = QuickShop.getInstance().stack().of(buyingMaterial, 1)
-                  .display(getConfigDisplay(id, modeToggleConfig, "<bold><green>Change Mode</green></bold>"))
+                  .customName(getConfigDisplay(id, modeToggleConfig, "<bold><green>Change Mode</green></bold>"))
                   .lore(getConfigLore(id, modeToggleConfig, buyingText, sellingText));
 
           final String modeState = shop.get().shopType().identifier().toUpperCase(Locale.ROOT);
@@ -290,7 +294,7 @@ public class MainPage extends QuickShopPage {
            || inventoryConfig != null && QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.open")) {
 
           open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(inventoryConfig.getMaterial(), 1)
-                                                         .display(getConfigDisplay(id, inventoryConfig, "<bold><green>View Inventory</green></bold>"))
+                                                         .customName(getConfigDisplay(id, inventoryConfig, "<bold><green>View Inventory</green></bold>"))
                                                          .lore(getConfigLore(id, inventoryConfig)))
                                          .withSlot(inventoryConfig.getSlot())
                                          .withActions(new RunnableAction((click)->{
@@ -318,20 +322,20 @@ public class MainPage extends QuickShopPage {
         SkullProfile profile = null;
         if(shop.get().getOwner().isRealPlayer()) {
           profile = new SkullProfile();
-          profile.setUuid(shop.get().getOwner().getUniqueId());
+          profile.uuid(shop.get().getOwner().getUniqueId());
         }
 
         if((!shop.get().playerAuthorize(id, BuiltInShopPermission.MANAGEMENT_PERMISSION)
             && !QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.staff"))) {
 
           open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(staffMaterial, 1)
-                                                         .display(getConfigDisplay(id, staffConfig, "<gray>Shop Staff (No Permission)</gray>"))
+                                                         .customName(getConfigDisplay(id, staffConfig, "<gray>Shop Staff (No Permission)</gray>"))
                                                          .profile(profile))
                                          .withSlot(staffSlot).build());
         } else {
 
           open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(staffMaterial, 1)
-                                                         .display(getConfigDisplay(id, staffConfig, "<bold><aqua>Shop Staff</aqua></bold>"))
+                                                         .customName(getConfigDisplay(id, staffConfig, "<bold><aqua>Shop Staff</aqua></bold>"))
                                                          .lore(getConfigLore(id, staffConfig))
                                                          .profile(profile))
                                          .withSlot(staffSlot)
@@ -345,7 +349,7 @@ public class MainPage extends QuickShopPage {
         if(shop.get().playerAuthorize(id, BuiltInShopPermission.VIEW_PURCHASE_LOGS)
            || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.history")) {
           open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(historyMaterial, 1)
-                                                         .display(getConfigDisplay(id, historyConfig, "<bold><light_purple>Transaction History</light_purple></bold>"))
+                                                         .customName(getConfigDisplay(id, historyConfig, "<bold><light_purple>Transaction History</light_purple></bold>"))
                                                          .lore(getConfigLore(id, historyConfig)))
                                          .withActions(new RunnableAction((click)->{
                                            // Close current menu and load history async
@@ -395,7 +399,7 @@ public class MainPage extends QuickShopPage {
         if(shop.get().playerAuthorize(id, BuiltInShopPermission.DELETE)
            || QuickShop.getInstance().perm().hasPermission(player, "quickshop.other.destroy")) {
           open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(removeMaterial, 1)
-                                                         .display(getConfigDisplay(id, removeConfig, "<bold><red>Delete Shop</red></bold>"))
+                                                         .customName(getConfigDisplay(id, removeConfig, "<bold><red>Delete Shop</red></bold>"))
                                                          .lore(getConfigLore(id, removeConfig)))
                                          .withActions(new GuiChatAction((message)->{
                                            if(!message.isEmpty()) {
@@ -416,7 +420,7 @@ public class MainPage extends QuickShopPage {
         final String closeMaterial = closeConfig != null? closeConfig.getMaterial() : "OAK_DOOR";
         final int closeSlot = closeConfig != null? closeConfig.getSlot() : 31;
         open.getPage().addIcon(new IconBuilder(QuickShop.getInstance().stack().of(closeMaterial, 1)
-                                                       .display(getConfigDisplay(id, closeConfig, "<red>Close</red>")))
+                                                       .customName(getConfigDisplay(id, closeConfig, "<red>Close</red>")))
                                        .withActions(new RunnableAction((click->viewer.get().close(QuickShop.getInstance().createMenuPlayer(player)))))
                                        .withSlot(closeSlot).build());
       }

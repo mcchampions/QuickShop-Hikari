@@ -41,8 +41,11 @@ import com.ghostchu.quickshop.common.util.CommonUtil;
 import com.ghostchu.quickshop.common.util.JsonUtil;
 import com.ghostchu.quickshop.database.bean.SimpleDataRecord;
 import com.ghostchu.quickshop.obj.QUserImpl;
+import com.ghostchu.quickshop.shop.cache.SimpleShopInventoryCountCache;
 import com.ghostchu.quickshop.shop.datatype.ShopSignPersistentDataType;
 import com.ghostchu.quickshop.shop.display.AbstractDisplayItem;
+import com.ghostchu.quickshop.shop.display.display.DisplayEntityItemManager;
+import com.ghostchu.quickshop.shop.display.virtual.VirtualDisplayItemManager;
 import com.ghostchu.quickshop.util.MsgUtil;
 import com.ghostchu.quickshop.util.Util;
 import com.ghostchu.quickshop.util.logger.Log;
@@ -51,6 +54,7 @@ import com.ghostchu.quickshop.util.performance.PerfMonitor;
 import com.ghostchu.simplereloadlib.ReloadResult;
 import com.ghostchu.simplereloadlib.Reloadable;
 import lombok.EqualsAndHashCode;
+import net.kyori.adventure.key.Key;
 import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.DyeColor;
@@ -61,6 +65,8 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.BlockState;
 import org.bukkit.block.Sign;
+import org.bukkit.block.TileState;
+import org.bukkit.block.sign.Side;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.enchantments.Enchantment;
@@ -68,7 +74,9 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.Damageable;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -80,6 +88,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -88,9 +97,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.ghostchu.quickshop.shop.SimpleShopManager.CHEST_SHOP_OWNER;
 import static com.ghostchu.quickshop.util.Util.waitForFuture;
 import static java.math.BigDecimal.ZERO;
 
@@ -103,6 +114,9 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   // We use deprecated method to create a fake quickshop-reremake namespace to trick bukkit to access legacy data.
   private static final NamespacedKey LEGACY_SHOP_NAMESPACED_KEY = new NamespacedKey("quickshop", "shopsign");
   private static final String LEGACY_SHOP_SIGN_RECOGNIZE_PATTERN = "§d§o ";
+
+  private final Map<Key, String> extraMap = new ConcurrentHashMap<>();
+
   @NotNull
   private final Location location;
   @EqualsAndHashCode.Exclude
@@ -113,7 +127,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   private final Map<UUID, String> playerGroup;
   @EqualsAndHashCode.Exclude
   private final boolean isDeleted = false;
-  private YamlConfiguration extra;
   private long shopId;
   private QUser owner;
   private double price;
@@ -132,8 +145,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @EqualsAndHashCode.Exclude
   private volatile boolean createBackup = false;
   @EqualsAndHashCode.Exclude
-  private InventoryPreview inventoryPreview = null;
-  @EqualsAndHashCode.Exclude
   private boolean dirty;
   @EqualsAndHashCode.Exclude
   private boolean updating = false;
@@ -150,6 +161,10 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
   @NotNull
   private BenefitProvider benefit;
+
+  @NotNull
+  @EqualsAndHashCode.Exclude
+  private final SimpleShopInventoryCountCache inventoryCountCache;
 
   //updating objects
   private final AtomicBoolean updatingAtomic = new AtomicBoolean(false);
@@ -179,7 +194,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
           final boolean unlimited,
           @NotNull final IShopType type,
           @NotNull final ShopState state,
-          @Nullable final YamlConfiguration extra,
+          @Nullable final Map<Key, String> extra,
           @Nullable final String currency,
           final boolean disableDisplay,
           @Nullable final QUser taxAccount,
@@ -187,7 +202,8 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
           @NotNull final String symbolLink,
           @Nullable final String shopName,
           @NotNull final Map<UUID, String> playerGroup,
-          @NotNull final BenefitProvider shopBenefit) {
+          @NotNull final BenefitProvider shopBenefit,
+          @NotNull final SimpleShopInventoryCountCache inventoryCountCache) {
 
     this.shopId = shopId;
     this.shopName = shopName;
@@ -223,7 +239,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     this.shopType = type;
     this.shopState = state;
     this.unlimited = unlimited;
-    this.extra = extra;
+
+    if (extra != null) {
+
+      this.extraMap.putAll(extra);
+    }
+
     this.currency = currency;
     this.disableDisplay = disableDisplay;
     this.taxAccount = taxAccount;
@@ -236,6 +257,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     }
     this.symbolLink = symbolLink;
     this.inventoryWrapperProvider = inventoryWrapperProvider;
+    this.inventoryCountCache = inventoryCountCache;
     updateShopData();
     // ContainerShop constructor is not allowed to write any persistent data to disk
     // ContainerShop constructor may run on both ServerThread and AsyncThread
@@ -243,18 +265,13 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
 
   private void updateShopData() {
 
-    if(this.extra == null) {
-      return;
-    }
+    if (this.extraMap.containsKey("currency")) {
 
-    final ConfigurationSection section = getExtra(plugin.getJavaPlugin());
-    if(section.getString("currency") != null) {
-      this.currency = section.getString("currency");
-      section.set("currency", null);
+      this.currency = this.extraMap.get("currency");
+      this.extraMap.remove("currency");
       Log.debug("Shop " + this + " currency data upgrade successful.");
       setDirty();
     }
-
   }
 
   /**
@@ -318,7 +335,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     if(this.displayItem == null) {
       try {
         final DisplayProvider provider = ServiceInjector.getInjectedService(DisplayProvider.class, null);
-        if(provider == null && AbstractDisplayItem.getNowUsing() == DisplayType.VIRTUALITEM && plugin.getVirtualDisplayItemManager() == null) {
+        if(provider == null && AbstractDisplayItem.getNowUsing() == DisplayType.VIRTUALITEM && plugin.getDisplayManager() == null) {
           plugin.logger().warn("Invalid display provider! " +
                                "No compatible display backend found. " +
                                "This may occur if ProtocolLib or PacketEvents is missing, outdated, or incompatible with your Minecraft version, " +
@@ -331,11 +348,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
           this.displayItem = provider.provide(this);
         } else {
 
-          if(AbstractDisplayItem.getNowUsing() == DisplayType.VIRTUALITEM) {
+          if(AbstractDisplayItem.getNowUsing() == DisplayType.VIRTUALITEM && plugin.getDisplayManager() instanceof final VirtualDisplayItemManager virtualManager) {
 
-            if(plugin.getVirtualDisplayItemManager() != null) {
-              this.displayItem = plugin.getVirtualDisplayItemManager().createVirtualDisplayItem(this);
-            }
+            this.displayItem = virtualManager.create(this);
+          } else if(AbstractDisplayItem.getNowUsing() == DisplayType.DISPLAY_ENTITY && plugin.getDisplayManager() instanceof final DisplayEntityItemManager displayManager) {
+
+            this.displayItem = displayManager.create(this);
           }
         }
 
@@ -352,6 +370,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
         return;
       }
     }
+
     if(this.displayItem != null) {
       if(!this.displayItem.isSpawned()) {
         /* Not spawned yet. */
@@ -428,17 +447,26 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
    *
    * @return The data table
    */
+  @Deprecated(forRemoval = true)
+  @ApiStatus.ScheduledForRemoval(inVersion = "6.4.0.0")
   @Override
   public @NotNull ConfigurationSection getExtra(@NotNull final Plugin plugin) {
 
-    if(this.extra == null) {
-      return new YamlConfiguration();
+    final YamlConfiguration yaml = new YamlConfiguration();
+
+    if (this.extraMap.isEmpty()) {
+      return yaml;
     }
-    ConfigurationSection section = extra.getConfigurationSection(plugin.getName());
-    if(section == null) {
-      return new YamlConfiguration();
-    }
-    return section;
+
+    final String prefix = plugin.getName().toLowerCase(Locale.ROOT) + ":";
+
+    this.extraMap.forEach((key, value) -> {
+      if (key.asString().startsWith(prefix)) {
+        yaml.set(key.asString().substring(prefix.length()), value);
+      }
+    });
+
+    return yaml;
   }
 
   /**
@@ -448,6 +476,13 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public @Nullable InventoryWrapper getInventory() {
 
     Util.ensureThread(false);
+    final int chunkX = location.getBlockX() >> 4;
+    final int chunkZ = location.getBlockZ() >> 4;
+
+    if(!this.location.getWorld().isChunkLoaded(chunkX, chunkZ)) {
+      return null;
+    }
+
     try {
       final InventoryWrapper inventoryWrapper = locateInventory(symbolLink);
       if(inventoryWrapper.isValid()) {
@@ -521,6 +556,11 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     setDirty();
   }
 
+  @Override
+  public @NotNull Block getShopBlock() {
+    return this.location.getBlock();
+  }
+
   /**
    * @return The location of the shops chest
    */
@@ -563,6 +603,17 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return;
     }
     this.owner = owner;
+
+    //Setup PDC with new owner
+    if (owner.getUniqueId() != null) {
+      final Block block = this.location.getBlock();
+      if(block.getState(false) instanceof final TileState tileState) {
+
+        tileState.getPersistentDataContainer().set(CHEST_SHOP_OWNER, PersistentDataType.STRING, owner.getUniqueId().toString());
+        tileState.update(true);
+      }
+    }
+
     setDirty();
     setSignText(plugin.getTextManager().findRelativeLanguages(owner, false));
   }
@@ -786,20 +837,21 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return -1;
     }
 
-    if(Bukkit.isPrimaryThread()) {
+    if(plugin.getJavaPlugin().getServer().isOwnedByCurrentRegion(location) ) {
 
-      if(this.getInventory() == null) {
+      final InventoryWrapper inv = this.getInventory();
+      if(inv == null) {
         Log.debug("Failed to calc RemainingSpace for shop " + this + ": Inventory null.");
         return 0;
       }
 
-      final int space = Util.countSpace(this.getInventory(), this);
+      final int space = Util.countSpace(inv, this);
       new ShopInventoryCalculateEvent(this, space, -1).callEvent();
       Log.debug("Space count is: " + space);
       return space;
     } else {
 
-      return plugin.getShopManager().queryShopInventoryCacheInDatabase(this).join().getSpace();
+      return Math.max(inventoryCountCache.getSpace(), 0);
     }
   }
 
@@ -811,39 +863,49 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public int getRemainingStock() {
 
+    return getRemainingStockAsync()
+            .orTimeout(5, TimeUnit.SECONDS)
+            .exceptionally(ex -> 0)
+            .join();
+  }
+
+  public CompletableFuture<Integer> getRemainingStockAsync() {
     if(this.unlimited) {
-      return -1;
+      return CompletableFuture.completedFuture(-1);
     }
 
     if(Bukkit.getServer().isOwnedByCurrentRegion(location)) {
 
-      if(this.getInventory() == null) {
-        return 0;
-      }
-      final int stock = Util.countItems(this.getInventory(), this);
-      new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
-      return stock;
+      return CompletableFuture.completedFuture(calculateRemainingStock());
     }
 
     final CompletableFuture<Integer> future = new CompletableFuture<>();
 
-    QuickShop.folia()
-      .getScheduler()
-      .runAtLocation(
-        this.location,
-        task->{
-          if(this.getInventory() == null) {
-            future.complete(0);
-            return;
-          }
+    try {
+      QuickShop.folia().getScheduler().runAtLocation(this.location, task->{
+        try {
+          future.complete(calculateRemainingStock());
+        } catch(final Throwable throwable) {
+          future.completeExceptionally(throwable);
+        }
+      });
+    } catch(final Throwable throwable) {
+      future.completeExceptionally(throwable);
+    }
 
-          final int stock = Util.countItems(this.getInventory(), this);
-          new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
+    return future;
+  }
 
-          future.complete(stock);
-        });
+  private int calculateRemainingStock() {
 
-    return future.join();
+    final InventoryWrapper inventoryWrapper = getInventory();
+    if(inventoryWrapper == null) {
+      return 0;
+    }
+
+    final int stock = Util.countItems(inventoryWrapper, this);
+    new ShopInventoryCalculateEvent(this, -1, stock).callEvent();
+    return stock;
   }
 
   /**
@@ -871,6 +933,62 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       throw new IllegalStateException("Cannot set shop id once it fully created.");
     }
     this.shopId = newId;
+    setDirty();
+  }
+
+  /**
+   * Retrieves additional data associated with the shop in the form of key-value pairs.
+   *
+   * @return A non-null map containing extra shop data. The map keys and values represent custom
+   * data associated with the shop, where both keys and values are strings.
+   */
+  @Override
+  public @NotNull Map<Key, String> getExtra() {
+
+    return Collections.unmodifiableMap(this.extraMap);
+  }
+
+  @Override
+  public String getExtra(@NotNull final NamespacedKey key) {
+    return this.extraMap.get(key);
+  }
+
+  @Override
+  public String getExtra(@NotNull final NamespacedKey key, @Nullable final String defaultValue) {
+    return this.extraMap.getOrDefault(key, defaultValue);
+  }
+
+  @Override
+  public void setExtra(@NotNull final Plugin plugin, @Nullable final Map<String, String> data) {
+    if (data == null) {
+      return;
+    }
+
+    data.forEach((k, v) -> {
+
+      this.extraMap.put(new NamespacedKey(plugin, k), v);
+    });
+    setDirty();
+  }
+
+  @Override
+  public void setExtra(@NotNull final NamespacedKey key, @NotNull final String data) {
+
+    this.extraMap.put(key, data);
+    setDirty();
+  }
+
+  @Override
+  public void removeExtra(@NotNull final NamespacedKey key) {
+    this.extraMap.remove(key);
+    setDirty();
+  }
+
+  @Override
+  public void removeAll(@NotNull final Plugin plugin) {
+    final String prefix = plugin.getName().toLowerCase(Locale.ROOT) + ":";
+
+    this.extraMap.keySet().removeIf(key -> key.asString().startsWith(prefix));
     setDirty();
   }
 
@@ -959,7 +1077,9 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     event = event.clone(Phase.POST);
     event.callEvent();
 
-    this.setSignText();
+    this.displayItem = null;
+    checkDisplay();
+    setSignText();
     setDirty();
   }
 
@@ -1020,7 +1140,9 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     event = event.clone(Phase.POST);
     event.callEvent();
 
-    this.setSignText();
+    this.displayItem = null;
+    checkDisplay();
+    setSignText();
     setDirty();
   }
 
@@ -1046,6 +1168,55 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     event.callEvent();
 
     return event.updated();
+  }
+
+  /**
+   * Retrieves the text to be displayed on the shop's sign asynchronously.
+   *
+   * @param locale The locale configuration used to generate the sign text.
+   *
+   * @return A CompletableFuture containing a list of {@link Component} objects that represent the
+   * text for each line of the shop's sign.
+   */
+  @Override
+  public CompletableFuture<List<Component>> getSignTextAsync(final @NotNull ProxiedLocale locale) {
+
+    final Location loc = this.location.clone();
+    final CompletableFuture<List<Component>> result = new CompletableFuture<>();
+
+    QuickShop.folia().getScheduler().runAtLocation(loc, task -> {
+      if (!this.isValid()) {
+        result.complete(List.of());
+        return;
+      }
+
+      plugin.getShopManager()
+              .shopLayoutProvider()
+              .createSignSnapshot(this, locale)
+              .thenApply(snapshot ->plugin.getShopManager().shopLayoutProvider().renderSnapshot(snapshot, locale))
+              .whenComplete((lines, throwable) -> {
+                QuickShop.folia().getScheduler().runAtLocation(loc, task2 -> {
+                  if (throwable != null) {
+
+                    result.completeExceptionally(throwable);
+                    return;
+                  }
+
+                  if (!this.isValid()) {
+
+                    result.complete(List.of());
+                    return;
+                  }
+
+                  final ShopSignLinesEvent event = new ShopSignLinesEvent(Phase.RETRIEVE, this, new LinkedList<>(lines));
+
+                  event.callEvent();
+                  result.complete(event.updated());
+                });
+              });
+    });
+
+    return result;
   }
 
   /**
@@ -1154,6 +1325,32 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Asynchronously determines whether the shop's inventory is available, indicating that it is
+   * neither out of space nor out of stock.
+   *
+   * @return A CompletionStage that completes with a Boolean value indicating whether the inventory
+   * is available (true) or not (false).
+   */
+  @Override
+  public CompletableFuture<Boolean> inventoryAvailableAsync() {
+
+    if(isUnlimited()) {
+      return CompletableFuture.completedFuture(true);
+    }
+    if(isSelling()) {
+
+      return getRemainingStockAsync().thenApply(stock -> stock > 0);
+    }
+    if(isBuying()) {
+      return CompletableFuture.completedFuture(getRemainingSpace() > 0);
+    }
+    if(isFrozen()) {
+      return CompletableFuture.completedFuture(false);
+    }
+    return CompletableFuture.completedFuture(true);
   }
 
   @Override
@@ -1461,9 +1658,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       Log.debug("Dupe unload request, canceled.");
       return;
     }
-    if(inventoryPreview != null) {
-      inventoryPreview.close();
-    }
     if(this.displayItem != null) {
       this.displayItem.remove(dontTouchWorld);
     }
@@ -1475,10 +1669,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   @Override
   public void openPreview(@NotNull final Player player) {
 
-    if(inventoryPreview == null) {
-      inventoryPreview = new InventoryPreview(plugin, getItem().clone(), player.getLocale());
-    }
-    inventoryPreview.show(player);
+    InventoryPreview.show(player, getItem());
 
   }
 
@@ -1631,19 +1822,13 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   }
 
   @Override
-  public @NotNull String saveExtraToYaml() {
-
-    return extra == null? "" : extra.saveToString();
-  }
-
-  @Override
   public ShopInfoStorage saveToInfoStorage() {
 
     return new ShopInfoStorage(this.bukkitLocation().getWorld().getName(),
                                new BlockPos(this.bukkitLocation()), this.owner, this.price,
-                               QuickShop.getInstance().platform().encodeStack(this.originalItem), isUnlimited()? 1 : 0
-            , shopType().id(),
-                               saveExtraToYaml(), this.currency, this.disableDisplay,
+                               QuickShop.getInstance().platform().encodeStack(this.originalItem),
+                               (isUnlimited())? 1 : 0, shopType().id(),
+                               serializeExtra(), this.currency, this.disableDisplay,
                                this.taxAccount, inventoryWrapperProvider,
                                saveToSymbolLink(), this.playerGroup);
   }
@@ -1675,43 +1860,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
   public void setDirty() {
 
     this.dirty = true;
-  }
-
-  /**
-   * Save the extra data to the shop.
-   *
-   * @param plugin Plugin instace
-   * @param data   The data table
-   */
-  @Override
-  public void setExtra(@NotNull final Plugin plugin, @Nullable final ConfigurationSection data) {
-
-    if(data == null && this.extra == null) {
-      return;
-    }
-
-    if(this.extra == null) {
-      this.extra = new YamlConfiguration();
-    }
-    extra.set(plugin.getName(), data);
-    // compress extra to null if possible
-    boolean anyValid = false;
-    for(final String key : extra.getKeys(false)) {
-      if(!extra.isConfigurationSection(key)) {
-        anyValid = true;
-        break;
-      }
-      final ConfigurationSection section = extra.getConfigurationSection(key);
-      if(section == null) continue;
-      if(!section.getKeys(false).isEmpty()) {
-        anyValid = true;
-        break;
-      }
-    }
-    if(!anyValid) {
-      this.extra = null;
-    }
-    setDirty();
   }
 
   @Override
@@ -1783,8 +1931,17 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     if(!Util.isLoaded(this.location)) {
       return;
     }
-    QuickShop.folia().getScheduler().runAtLocation(this.location, (consumer)->{
-      this.setSignText(getSignText(plugin.getTextManager().findRelativeLanguages(MsgUtil.getDefaultGameLanguageCode())));
+
+    final Location loc = this.location.clone();
+    final CompletableFuture<List<Component>> textCompletable = getSignTextAsync(plugin.getTextManager().findRelativeLanguages(MsgUtil.getDefaultGameLanguageCode()));
+
+    textCompletable.thenAccept(lines -> {
+      QuickShop.folia().getScheduler().runAtLocation(loc, (consumer)->{
+        if(!isValid()) {
+          return;
+        }
+        this.setSignText(lines);
+      });
     });
   }
 
@@ -1804,20 +1961,20 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
     event.callEvent();
 
     for(final Sign sign : signs) {
+      final boolean isGlowing = plugin.getConfig().getBoolean("shop.sign-glowing", false);
+      final boolean isWaxed = plugin.getConfig().getBoolean("shop.sign-wax", false);
+      plugin.platform().setLines(sign, event.updated());
+
+      sign.getSide(Side.FRONT).setGlowingText(isGlowing);
 
       final DyeColor dyeColor = Util.getDyeColor();
       if(dyeColor != null) {
-        sign.setColor(dyeColor);
+        sign.getSide(Side.FRONT).setColor(dyeColor);
       }
-      final boolean isGlowing = plugin.getConfig().getBoolean("shop.sign-glowing", false);
-      final boolean isWaxed = plugin.getConfig().getBoolean("shop.sign-wax", false);
-
-      sign.setGlowingText(isGlowing);
       sign.setWaxed(isWaxed);
-      sign.update(true);
-      plugin.platform().setLines(sign, event.updated());
 
       new ShopSignUpdateEvent(this, sign).callEvent();
+      sign.update(true);
     }
     if(plugin.getSignHooker() != null) {
       Log.debug("Start sign broadcast...");
@@ -1839,9 +1996,17 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return;
     }
 
-    QuickShop.folia().getScheduler().runAtLocation(this.location, (consumer)->{
-      this.setSignText(getSignText(locale));
-    });
+    final Location loc = this.location.clone();
+    final CompletableFuture<List<Component>> textCompletable = getSignTextAsync(locale);
+
+    textCompletable.thenAccept(lines ->QuickShop.folia().getScheduler().runAtLocation(loc, (consumer)->{
+
+      if(!isValid()) {
+
+        return;
+      }
+      this.setSignText(lines);
+    }));
   }
 
   /**
@@ -1930,7 +2095,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
             isDisableDisplay(),
             getTaxAccount(),
             JsonUtil.getGson().toJson(getPermissionAudiences()),
-            saveExtraToYaml(),
+            serializeExtra(),
             getInventoryWrapperProvider(),
             saveToSymbolLink(),
             new Date(),
@@ -1958,6 +2123,12 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
       return Objects.requireNonNull(this.item.getItemMeta()).getEnchants();
     }
     return Collections.emptyMap();
+  }
+
+  @ApiStatus.Internal
+  public @NotNull SimpleShopInventoryCountCache getInventoryCountCache() {
+
+    return inventoryCountCache;
   }
 
   /**
@@ -2010,7 +2181,7 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
            ", runtimeRandomUniqueId=" + runtimeRandomUniqueId +
            ", playerGroup=" + playerGroup +
            ", isDeleted=" + isDeleted +
-           ", extra=" + extra +
+           ", extra=" + serializeExtra() +
            ", shopId=" + shopId +
            ", owner=" + owner +
            ", price=" + price +
@@ -2021,7 +2192,6 @@ public class ContainerShop implements Shop<Double, Location>, Reloadable {
            ", displayItem=" + displayItem +
            ", isLoaded=" + isLoaded +
            ", createBackup=" + createBackup +
-           ", inventoryPreview=" + inventoryPreview +
            ", dirty=" + dirty +
            ", updating=" + updating +
            ", currency='" + currency + '\'' +
