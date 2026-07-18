@@ -75,7 +75,6 @@ import org.bukkit.block.TileState;
 import org.bukkit.block.data.BlockData;
 import org.bukkit.block.data.Waterlogged;
 import org.bukkit.block.data.type.WallSign;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemFlag;
@@ -1450,7 +1449,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
     }
     final EconomyProvider eco = plugin.getEconomyProvider(shop.getCurrency());
     if(shop.isBuying()) {
-      if(CommonUtil.isNumeric(message)) {
+      if(CommonUtil.isInteger(message)) {
         amount = Integer.parseInt(message);
       } else {
         if(message.equalsIgnoreCase(tradeAllKeyword)) {
@@ -1465,7 +1464,7 @@ public class SimpleShopManager extends AbstractShopManager implements ShopManage
       }
       actionBuying(p, new BukkitInventoryWrapper(p.getInventory()), eco, info, shop, amount);
     } else if(shop.isSelling()) {
-      if(CommonUtil.isNumeric(message)) {
+      if(CommonUtil.isInteger(message)) {
         amount = Integer.parseInt(message);
       } else {
         if(message.equalsIgnoreCase(tradeAllKeyword)) {
